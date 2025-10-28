@@ -14,10 +14,19 @@ def conectar_db():
             paciente TEXT NOT NULL,
             fecha TEXT NOT NULL,
             forma_pago TEXT NOT NULL,
+            descripcion TEXT,
             monto REAL NOT NULL,
             pagado INTEGER DEFAULT 0
         )
     """)
+    # Migración segura: asegurar columna 'descripcion' en ingresos si la DB ya existía sin ella
+    try:
+        c.execute("PRAGMA table_info(ingresos)")
+        columnas = [row[1] for row in c.fetchall()]
+        if 'descripcion' not in columnas:
+            c.execute("ALTER TABLE ingresos ADD COLUMN descripcion TEXT")
+    except sqlite3.Error:
+        pass
     c.execute("""
         CREATE TABLE IF NOT EXISTS egresos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,12 +87,13 @@ def obtener_fecha_formato(date_entry):
 def agregar_ingreso():
     conn = sqlite3.connect("gestion.db")
     c = conn.cursor()
-    c.execute("INSERT INTO ingresos (paciente, fecha, forma_pago, monto, pagado) VALUES (?, ?, ?, ?, ?)",
-              (entry_paciente.get(), obtener_fecha_formato(entry_fecha_ingreso), entry_forma_pago.get(), float(entry_monto_ingreso.get()), var_pagado.get()))
+    c.execute("INSERT INTO ingresos (paciente, fecha, forma_pago, descripcion, monto, pagado) VALUES (?, ?, ?, ?, ?, ?)",
+              (entry_paciente.get(), obtener_fecha_formato(entry_fecha_ingreso), entry_forma_pago.get(), entry_descripcion_ingreso.get(), float(entry_monto_ingreso.get()), var_pagado.get()))
     conn.commit()
     conn.close()
     entry_paciente.delete(0, tk.END)
     entry_forma_pago.delete(0, tk.END)
+    entry_descripcion_ingreso.delete(0, tk.END)
     entry_monto_ingreso.delete(0, tk.END)
     var_pagado.set(0)
     actualizar_listas()
@@ -97,8 +107,15 @@ def cargar_ingreso(event):
     entry_forma_pago.delete(0, tk.END)
     entry_forma_pago.insert(0, values[3])
     entry_monto_ingreso.delete(0, tk.END)
-    entry_monto_ingreso.insert(0, values[4])
-    var_pagado.set(1 if values[5] == "Sí" else 0)
+    # Descripción ahora viene en la tabla (columna 4)
+    entry_descripcion_ingreso.delete(0, tk.END)
+    try:
+        entry_descripcion_ingreso.insert(0, values[4] or "")
+    except Exception:
+        entry_descripcion_ingreso.insert(0, "")
+    # Monto y pagado se desplazan un índice por la nueva columna
+    entry_monto_ingreso.insert(0, values[5])
+    var_pagado.set(1 if values[6] == "Sí" else 0)
     btn_actualizar_ingreso.config(state=tk.NORMAL)
     btn_agregar_ingreso.config(state=tk.DISABLED)
     btn_eliminar_ingreso.config(state=tk.NORMAL)
@@ -108,12 +125,13 @@ def actualizar_ingreso():
     ingreso_id = tree_ingresos.item(selected_item, 'values')[0]
     conn = sqlite3.connect("gestion.db")
     c = conn.cursor()
-    c.execute("UPDATE ingresos SET paciente = ?, fecha = ?, forma_pago = ?, monto = ?, pagado = ? WHERE id = ?",
-              (entry_paciente.get(), obtener_fecha_formato(entry_fecha_ingreso), entry_forma_pago.get(), float(entry_monto_ingreso.get()), var_pagado.get(), ingreso_id))
+    c.execute("UPDATE ingresos SET paciente = ?, fecha = ?, forma_pago = ?, descripcion = ?, monto = ?, pagado = ? WHERE id = ?",
+              (entry_paciente.get(), obtener_fecha_formato(entry_fecha_ingreso), entry_forma_pago.get(), entry_descripcion_ingreso.get(), float(entry_monto_ingreso.get()), var_pagado.get(), ingreso_id))
     conn.commit()
     conn.close()
     entry_paciente.delete(0, tk.END)
     entry_forma_pago.delete(0, tk.END)
+    entry_descripcion_ingreso.delete(0, tk.END)
     entry_monto_ingreso.delete(0, tk.END)
     var_pagado.set(0)
     btn_actualizar_ingreso.config(state=tk.DISABLED)
@@ -130,6 +148,7 @@ def eliminar_ingreso():
     conn.close()
     entry_paciente.delete(0, tk.END)
     entry_forma_pago.delete(0, tk.END)
+    entry_descripcion_ingreso.delete(0, tk.END)
     entry_monto_ingreso.delete(0, tk.END)
     btn_eliminar_ingreso.config(state=tk.DISABLED)
     btn_actualizar_ingreso.config(state=tk.DISABLED)
@@ -139,6 +158,7 @@ def eliminar_ingreso():
 def cancelar_actualizacion_ingreso():
     entry_paciente.delete(0, tk.END)
     entry_forma_pago.delete(0, tk.END)
+    entry_descripcion_ingreso.delete(0, tk.END)
     entry_monto_ingreso.delete(0, tk.END)
     var_pagado.set(0)
     btn_actualizar_ingreso.config(state=tk.DISABLED)
@@ -884,10 +904,10 @@ def actualizar_listas():
     
     conn = sqlite3.connect("gestion.db")
     c = conn.cursor()
-    c.execute("SELECT id, paciente, fecha, forma_pago, monto, pagado FROM ingresos WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ? ORDER BY fecha", (combo_mes.get(), combo_anio.get()))
+    c.execute("SELECT id, paciente, fecha, forma_pago, descripcion, monto, pagado FROM ingresos WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ? ORDER BY fecha", (combo_mes.get(), combo_anio.get()))
     for row in c.fetchall():
-        pagado_str = "Sí" if row[5] == 1 else "No"
-        tree_ingresos.insert("", "end", values=(row[0], row[1], row[2], row[3], row[4], pagado_str))
+        pagado_str = "Sí" if row[6] == 1 else "No"
+        tree_ingresos.insert("", "end", values=(row[0], row[1], row[2], row[3], row[4] or "", row[5], pagado_str))
     
     c.execute("SELECT id, fecha, descripcion, categoria, factura, monto FROM egresos WHERE strftime('%m', fecha) = ? AND strftime('%Y', fecha) = ? ORDER BY fecha", (combo_mes.get(), combo_anio.get()))
     for row in c.fetchall():
@@ -956,7 +976,7 @@ notebook.pack(expand=True, fill="both")
 frame_ingresos.columnconfigure(0, weight=1)
 frame_ingresos.columnconfigure(1, weight=1)
 
-frame_ingresos.grid_rowconfigure(7, weight=1)
+frame_ingresos.grid_rowconfigure(8, weight=1)
 
 frame_egresos.columnconfigure(0, weight=1)
 frame_egresos.columnconfigure(1, weight=1)
@@ -1020,40 +1040,44 @@ ttk.Label(frame_ingresos, text="Forma de Pago").grid(row=2, column=0, padx=5, pa
 entry_forma_pago = ttk.Combobox(frame_ingresos, values=["EFECTIVO", "BS", "ZELLE JUDITH", "ZELLE CESAR"])
 entry_forma_pago.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-ttk.Label(frame_ingresos, text="Monto").grid(row=3, column=0, padx=5, pady=5, sticky="e")
-entry_monto_ingreso = ttk.Entry(frame_ingresos, validate="key", validatecommand=(root.register(lambda P: P.replace('.', '', 1).isdigit() or P == ""), '%P'))
-entry_monto_ingreso.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+ttk.Label(frame_ingresos, text="Descripción").grid(row=3, column=0, padx=5, pady=5, sticky="e")
+entry_descripcion_ingreso = ttk.Entry(frame_ingresos)
+entry_descripcion_ingreso.grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
-ttk.Label(frame_ingresos, text="Pagado").grid(row=4, column=0, padx=5, pady=5, sticky="e")
+ttk.Label(frame_ingresos, text="Monto").grid(row=4, column=0, padx=5, pady=5, sticky="e")
+entry_monto_ingreso = ttk.Entry(frame_ingresos, validate="key", validatecommand=(root.register(lambda P: P.replace('.', '', 1).isdigit() or P == ""), '%P'))
+entry_monto_ingreso.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+
+ttk.Label(frame_ingresos, text="Pagado").grid(row=5, column=0, padx=5, pady=5, sticky="e")
 var_pagado = tk.IntVar()
 check_pagado = ttk.Checkbutton(frame_ingresos, variable=var_pagado)
-check_pagado.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+check_pagado.grid(row=5, column=1, padx=5, pady=5, sticky="w")
 
 btn_agregar_ingreso = ttk.Button(frame_ingresos, text="Agregar Ingreso", command=lambda: agregar_ingreso() if validar_ingreso() else None, state=tk.ACTIVE)
-btn_agregar_ingreso.grid(row=5, column=0, padx=5, pady=5, sticky="ew")
+btn_agregar_ingreso.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
 
 btn_eliminar_ingreso = ttk.Button(frame_ingresos, text="Eliminar Ingreso", command=eliminar_ingreso, state=tk.DISABLED)
-btn_eliminar_ingreso.grid(row=5, column=1, padx=5, pady=5, sticky="ew")
+btn_eliminar_ingreso.grid(row=6, column=1, padx=5, pady=5, sticky="ew")
 
 btn_actualizar_ingreso = ttk.Button(frame_ingresos, text="Actualizar Ingreso", command=actualizar_ingreso, state=tk.DISABLED)
-btn_actualizar_ingreso.grid(row=6, column=0, padx=5, pady=5, sticky="ew")
+btn_actualizar_ingreso.grid(row=7, column=0, padx=5, pady=5, sticky="ew")
 
 btn_cancelar_actualizacion = ttk.Button(frame_ingresos, text="Cancelar", command=cancelar_actualizacion_ingreso)
-btn_cancelar_actualizacion.grid(row=6, column=1, padx=5, pady=5, sticky="ew")
+btn_cancelar_actualizacion.grid(row=7, column=1, padx=5, pady=5, sticky="ew")
 
-columns = ("ID", "Residente", "Fecha", "Forma de Pago", "Monto", "Pagado")
+columns = ("ID", "Residente", "Fecha", "Forma de Pago", "Descripción", "Monto", "Pagado")
 tree_ingresos = ttk.Treeview(frame_ingresos, columns=columns, show="headings")
 for col in columns:
     tree_ingresos.heading(col, text=col)
     tree_ingresos.column(col, stretch=tk.YES, anchor="center")
 
 tree_ingresos.column("ID", width=0, stretch=tk.NO)
-tree_ingresos.grid(row=7, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
+tree_ingresos.grid(row=8, column=0, columnspan=2, padx=5, pady=5, sticky="nsew")
 tree_ingresos.bind("<Double-1>", cargar_ingreso)
 
 # Mostrar Ingresos Mensuales
 label_ingresos_mesuales = ttk.Label(frame_ingresos, text="Ingresos Mensuales: 0.00 $.")
-label_ingresos_mesuales.grid(row=8, column=0, columnspan=2, padx=5, pady=5)
+label_ingresos_mesuales.grid(row=9, column=0, columnspan=2, padx=5, pady=5)
 
 # Sección Egresos
 ttk.Label(frame_egresos, text="Fecha").grid(row=0, column=0, padx=5, pady=5, sticky="e")
