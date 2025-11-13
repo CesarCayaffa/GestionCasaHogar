@@ -970,6 +970,23 @@ notebook.add(frame_asistencia_empleado, text="Asistencia Empleados")
 notebook.add(frame_ingresos, text="Ingresos")
 notebook.add(frame_egresos, text="Egresos")
 notebook.add(frame_balance, text="Balance")
+
+# Filtros de Mes y Año
+filtros_frame = ttk.Frame(root, padding="10 10 10 10")
+filtros_frame.pack(side=tk.TOP, fill=tk.X)
+
+ttk.Label(filtros_frame, text="Mes:").pack(side=tk.LEFT, padx=5, pady=5)
+combo_mes = ttk.Combobox(filtros_frame, values=[f"{i:02d}" for i in range(1, 13)])
+combo_mes.pack(side=tk.LEFT, padx=5, pady=5)
+combo_mes.set(datetime.now().strftime("%m"))
+
+ttk.Label(filtros_frame, text="Año:").pack(side=tk.LEFT, padx=5, pady=5)
+combo_anio = ttk.Combobox(filtros_frame, values=[str(i) for i in range(2000, datetime.now().year + 1)])
+combo_anio.pack(side=tk.LEFT, padx=5, pady=5)
+combo_anio.set(datetime.now().strftime("%Y"))
+
+ttk.Button(filtros_frame, text="Actualizar", command=actualizar_listas).pack(side=tk.LEFT, padx=5, pady=5)
+
 notebook.pack(expand=True, fill="both")
 
 # Configurar el contenedor para que las columnas se expandan
@@ -1149,25 +1166,6 @@ label_categoria_fijos = ttk.Label(frame_balance, text="Fijos: 0.00 $.")
 label_categoria_fijos.pack(padx=10, pady=10)
 label_categoria_abono = ttk.Label(frame_balance, text="Abono a Deuda: 0.00 $.")
 label_categoria_abono.pack(padx=10, pady=10)
-
-# Filtros de Mes y Año
-# Colocar los filtros en la parte inferior y forzar tamaños más pequeños y readonly
-filtros_frame = ttk.Frame(root, padding="6 6 6 6")
-filtros_frame.pack(side=tk.BOTTOM, fill=tk.X)
-
-ttk.Label(filtros_frame, text="Mes:").pack(side=tk.LEFT, padx=5, pady=3)
-combo_mes = ttk.Combobox(filtros_frame, values=[f"{i:02d}" for i in range(1, 13)], width=5, state="readonly")
-combo_mes.pack(side=tk.LEFT, padx=5, pady=3)
-combo_mes.set(datetime.now().strftime("%m"))
-
-ttk.Label(filtros_frame, text="Año:").pack(side=tk.LEFT, padx=5, pady=3)
-combo_anio = ttk.Combobox(filtros_frame, values=[str(i) for i in range(2000, datetime.now().year + 1)], width=6, state="readonly")
-combo_anio.pack(side=tk.LEFT, padx=5, pady=3)
-combo_anio.set(datetime.now().strftime("%Y"))
-
-# Botón actualizar - mantengo a la izquierda para que no ocupe espacio innecesario
-ttk.Button(filtros_frame, text="Actualizar", command=actualizar_listas).pack(side=tk.LEFT, padx=5, pady=3)
-
 # Vista de Residentes
 ttk.Label(frame_residentes, text="Nombre").grid(row=0, column=0, padx=5, pady=5, sticky="e")
 entry_nombre_residente = ttk.Entry(frame_residentes)
